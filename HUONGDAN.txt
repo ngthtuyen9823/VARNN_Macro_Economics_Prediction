@@ -1,0 +1,28 @@
+Hướng dẫn chạy chương trình Streamlit
+Bước 1: Cài đặt Python
+Đảm bảo bạn đã cài đặt Python trên máy tính (phiên bản từ 3.7 trở lên).
+Kiểm tra phiên bản Python bằng lệnh:
+python --version
+
+Bước 2: Tạo và kích hoạt môi trường ảo
+Tạo môi trường ảo (nếu chưa có):
+python -m venv env
+Kích hoạt môi trường ảo:
+Trên Windows:
+.\env\Scripts\activate
+Trên macOS/Linux:
+source env/bin/activate
+
+Bước 3: Cài đặt các thư viện cần thiết
+Đảm bảo bạn có tệp requirements.txt trong thư mục dự án.
+Cài đặt các thư viện:
+pip install -r requirements.txt
+
+Bước 4: Chạy chương trình Streamlit
+Kiểm tra tệp main.py nằm trong thư mục hiện tại.
+Chạy chương trình với lệnh:
+streamlit run main.py
+Sau khi chạy lệnh, trình duyệt sẽ tự động mở ứng dụng Streamlit. Nếu không, bạn có thể truy cập theo đường dẫn hiển thị trong terminal (thường là http://localhost:8501).
+Lưu ý:
+Đảm bảo bạn luôn kích hoạt môi trường ảo trước khi cài đặt hoặc chạy chương trình.
+Nếu gặp lỗi, hãy kiểm tra lại việc cài đặt Python, môi trường ảo, hoặc các thư viện trong requirements.txt.
