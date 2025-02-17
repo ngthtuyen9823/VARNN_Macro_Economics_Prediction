@@ -1,1 +1,0 @@
-{"model_type": "VARNN", "best_parameters": {"learning_rate": 0.01, "batch_size": 16, "hidden_layer_sizes": 64, "epoch": 150}, "best_mse": 0.3091627493781683, "search_time": 535.4035639762878, "best_lags": 5}

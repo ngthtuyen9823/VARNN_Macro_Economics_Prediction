@@ -1,0 +1,1 @@
+{"model_type": "Hybrid VARNN", "best_parameters": {"learning_rate": 0.01, "batch_size": 16, "hidden_layer_sizes": 64, "epoch": 150}, "best_mse": 0.5211988556620453, "search_time": 562.4628393650055, "best_lags": 5}

@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 
 
+
 def preprocess_data(data, drop_threshold=1):
     data['Year'] = data['Series Name'].str.extract(r'\[YR(\d{4})\]')[0]
     data['Date'] = pd.to_datetime(data['Year'], format='%Y') 
