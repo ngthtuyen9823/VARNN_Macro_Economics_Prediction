@@ -36,19 +36,10 @@ from preprocessing import (
     split_train_val,
     make_stationary,
 )
-from models import create_var_predictions, build_varnn
+from models import create_var_predictions, create_lagged_features, grid_search, build_varnn
 from visualization import visualize_predictions, visualize_column
 from statistic import check_stationarity
-from utils import grid_search, augment_timeseries_data, augment_with_gaussian
-
-# Define function to create lagged features
-def create_lagged_features(df, lags):
-    df_lagged = df.copy()
-    for lag in range(1, lags + 1):
-        lagged = df.shift(lag)
-        lagged.columns = [f"{col}_lag{lag}" for col in df.columns]
-        df_lagged = pd.concat([df_lagged, lagged], axis=1)
-    return df_lagged.dropna()
+from utils import augment_with_numpy, augment_with_gaussian
                 
 
 def main():
@@ -56,18 +47,14 @@ def main():
     
     # Step 1: Upload and Display Data
     uploaded_file = st.sidebar.file_uploader("Upload CSV File", type='csv', key='upload_train')
-    
     if uploaded_file:
         file_name = uploaded_file.name[:-4]
         directory_results = f'results/{file_name}'
         directory_models = f'models/{file_name}'
-        
         if not os.path.exists(directory_results):
             os.makedirs(directory_results)
-            
         if not os.path.exists(directory_models):
             os.makedirs(directory_models)
-            
         data = pd.read_csv(uploaded_file)
 
         # Step 2: Preprocess data
@@ -78,19 +65,16 @@ def main():
             "Choose Augmentation Method",
             ("Gaussian Noise", "Numpy")
         )
-        
         data_aug = data
         aug_box = st.sidebar.checkbox("Augment Data")
         if aug_box:
             if augment_method == "Gaussian Noise":                        
                 data_aug = augment_with_gaussian(data)
             elif augment_method == "Numpy":            
-                data_aug = augment_timeseries_data(data)
-                
+                data_aug = augment_with_numpy(data)
         data = data_aug
         st.subheader("Raw Data")
         st.dataframe(data)
-
         selected_col = st.sidebar.selectbox("Select Column to Visualize", data.columns)
         visualize_column(data, selected_col)
         
@@ -105,7 +89,6 @@ def main():
             data = make_stationary(data)
             st.subheader("Stationary Data")
             st.dataframe(data)
-            
             visualize_column(data, selected_col, description="(After making stationary)")
             
         # Step 6: Normalization
@@ -113,7 +96,7 @@ def main():
         if normalization_method == "MinMax Normalization":
             val_input = st.sidebar.text_input("Enter (minimum, maximum) values", "0,1")
             min_val, max_val = map(int, val_input.split(","))
-
+            
         if normalization_method == "Z-Score Normalization":
             scaler = StandardScaler()
         elif normalization_method == "MinMax Normalization":
@@ -137,7 +120,6 @@ def main():
         test_ratio = 1 - train_test_ratio
         st.sidebar.text(f"Train: {train_test_ratio:.1f}, Test: {test_ratio:.1f}")
         train_data, test_data = split_train_test(data, train_test_ratio)
-
         st.write(f"Train-Test Split: Train: {len(train_data)} rows, Test: {len(test_data)} rows")
 
         # Train-Validation Split Ratio (within Train)
@@ -145,7 +127,6 @@ def main():
         val_ratio = 1 - train_val_ratio
         st.sidebar.text(f"Validation: {train_val_ratio:.1f}, Train: {val_ratio:.1f}")
         train_data_final, val_data = split_train_val(train_data, train_val_ratio)
-
         if len(train_data_final) == 0 or len(val_data) == 0:
             st.error("Train-Validation ratio is invalid. Adjust the slider!")
         else:
@@ -153,7 +134,6 @@ def main():
 
         # Step 8: Train Model  
         model_type = st.sidebar.selectbox("Select Model", ["VARNN", "Hybrid VARNN", "VAR"])
-
         train_button = st.sidebar.button("Train Model")
         stop_button = st.sidebar.button("Stop Training")
         test_button = st.sidebar.button("Test Model")
@@ -275,9 +255,24 @@ def main():
                 except Exception as e:
                     st.error(f"Training stopped or failed: {e}")
 
-            
+                if stop_training.is_set():
+                    st.warning("Training was stopped by the user.")
+                    
+                else:
+                    st.write("### Training History")
+                    loss_df = pd.DataFrame({
+                        'Epoch': range(1, len(history.history['loss']) + 1),
+                        'Training Loss': history.history['loss'],
+                        'Validation Loss': history.history['val_loss']
+                    })
+                    st.line_chart(loss_df.set_index('Epoch'))
+
+                    st.write("### Final Losses")
+                    st.write(f"Final Training Loss: {history.history['loss'][-1]:.4f}")
+                    st.write(f"Final Validation Loss: {history.history['val_loss'][-1]:.4f}")
+                
             # ================================
-            # Hybrid VARNN Model (already implemented)
+            # Hybrid VARNN Model Implementation
             # ================================
             if model_type == "Hybrid VARNN":
                 var_model = VAR(train_data)
@@ -392,8 +387,32 @@ def main():
                     json.dump(grid_search_results, f)
 
                 st.success("VAR model training completed and model saved.")
-
+        
+        if stop_training.is_set():
+            with open(f'results/{file_name}/{model_type}_grid_search_results.json', 'r') as f:
+                grid_search_results = json.load(f)
+            st.write("### Last Saved Results")
+            st.json(grid_search_results.get('best_parameters', {}))
+            st.write(f"Best MSE: {grid_search_results.get('best_mse', 'N/A')}")
+            st.write(f"Search Time: {grid_search_results.get('search_time', 'N/A')}")
+            st.write(f"Best Lags (VAR): {grid_search_results.get('best_lags', 'N/A')}")
+            st.write("### Training History")
                 
+            with open(f'results/{file_name}/training_history.pkl', "rb") as f:
+                loaded_history = pickle.load(f)
+                    
+            loss_df = pd.DataFrame({
+                'Epoch': range(1, len(loaded_history['loss']) + 1),
+                'Training Loss': loaded_history['loss'],
+                'Validation Loss': loaded_history['val_loss']
+            })
+                
+            st.line_chart(loss_df.set_index('Epoch'))
+
+            st.write("### Final Losses")
+            st.write(f"Final Training Loss: {loaded_history['loss'][-1]:.4f}")
+            st.write(f"Final Validation Loss: {loaded_history['val_loss'][-1]:.4f}")
+                        
         # Step 9: Test Model                
         if test_button:
             start_time = time.time()
@@ -472,9 +491,6 @@ def main():
                 predictions = varnn_model.predict(test_var_pred)
                 # Align ground truth: test_var_pred is created starting from index best_lags
                 ground_truth = test_data.iloc[best_lags:]
-
-                           # Get predictions from the trained neural network
-
                 execution_time = time.time() - start_time
                 st.subheader("Actual vs Predicted Values")
                 visualize_predictions(ground_truth, predictions, test_data.columns)
@@ -518,20 +534,12 @@ def main():
                 n_features = len(test_data.columns)
                 X_test_vn = test_lagged.iloc[:, n_features:]
                 y_test_vn = test_lagged.iloc[:, :n_features]
-
                 
-                # Print shapes to debug
-                print("X_test_vn shape:", X_test_vn.shape)
-                print("Expected input shape:", varnn_model.input_shape)
-
                 # Make predictions
                 predictions = varnn_model.predict(X_test_vn)
                 predictions = predictions[:len(y_test_vn)]  # Ensure same length
 
                 ground_truth = y_test_vn
-
-
-                # Get predictions from the trained neural network
 
                 execution_time = time.time() - start_time
                 st.subheader("Actual vs Predicted Values")
@@ -552,7 +560,6 @@ def main():
                 evaluation_df = pd.DataFrame(evaluation_metrics)
                 st.subheader("Evaluation")
                 st.table(evaluation_df)
-
 
             
         # Step 10: Predict Future Values
