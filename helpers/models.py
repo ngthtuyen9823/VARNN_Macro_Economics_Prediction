@@ -1,20 +1,18 @@
 import time
-
+import streamlit as st
 import numpy as np
 import pandas as pd
 
 from sklearn.metrics import mean_squared_error
 
-import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Input, Dropout
 from tensorflow.keras.optimizers import Adam
 
-
-def grid_search(train_var_pred, train_targets, val_var_pred, val_targets, param_grid):
+def grid_search(train_var_pred, train_targets, val_var_pred, val_targets, param_grid, stop_training_flag=None):
     """
     Performs a grid search to optimize hyperparameters for a variational recurrent neural network (VarNN).
-    
+
     Parameters:
         train_var_pred (np.ndarray): Training input features.
         train_targets (np.ndarray): Training target values.
@@ -25,7 +23,8 @@ def grid_search(train_var_pred, train_targets, val_var_pred, val_targets, param_
             - 'batch_size' (list of int): Batch sizes to try.
             - 'hidden_layer_sizes' (list of tuples): Different hidden layer configurations.
             - 'epoch' (list of int): Number of epochs to train for.
-    
+        stop_training_flag (threading.Event, optional): Event flag to interrupt the grid search.
+
     Returns:
         dict: Best hyperparameters found.
         float: Corresponding lowest mean squared error.
@@ -39,15 +38,28 @@ def grid_search(train_var_pred, train_targets, val_var_pred, val_targets, param_
     required_keys = {'learning_rate', 'batch_size', 'hidden_layer_sizes', 'epoch'}
     if not required_keys.issubset(param_grid.keys()):
         raise ValueError(f"Parameter grid must contain {required_keys}.")
-    
+
     best_params = None
     best_mse = float("inf")
     start_time = time.time()
     
     for lr in param_grid['learning_rate']:
+        if stop_training_flag is not None and stop_training_flag.is_set():
+            st.warning("Grid search interrupted (stop flag set).")
+            return best_params, best_mse, time.time() - start_time
         for batch_size in param_grid['batch_size']:
+            if stop_training_flag is not None and stop_training_flag.is_set():
+                st.warning("Grid search interrupted (stop flag set).")
+                return best_params, best_mse, time.time() - start_time
             for hidden_layer_sizes in param_grid['hidden_layer_sizes']:
+                if stop_training_flag is not None and stop_training_flag.is_set():
+                    st.warning("Grid search interrupted (stop flag set).")
+                    return best_params, best_mse, time.time() - start_time
                 for epoch in param_grid['epoch']:
+                    if stop_training_flag is not None and stop_training_flag.is_set():
+                        st.warning("Grid search interrupted (stop flag set).")
+                        return best_params, best_mse, time.time() - start_time
+
                     model = build_varnn(
                         input_dim=train_var_pred.shape[1],
                         output_dim=train_targets.shape[1],
@@ -55,7 +67,8 @@ def grid_search(train_var_pred, train_targets, val_var_pred, val_targets, param_
                         hidden_layer_sizes=hidden_layer_sizes
                     )
                     model.fit(
-                        train_var_pred, train_targets,
+                        train_var_pred,
+                        train_targets,
                         epochs=epoch,
                         batch_size=batch_size,
                         validation_data=(val_var_pred, val_targets),
@@ -155,4 +168,3 @@ def create_lagged_features(df, lags):
         df_lagged = pd.concat([df_lagged, lagged], axis=1)
 
     return df_lagged.dropna()
-
